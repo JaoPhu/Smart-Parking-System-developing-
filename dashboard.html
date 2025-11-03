@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Parking - แผงควบคุมแอดมิน</title>
+    <!-- 1. โหลด Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Kanit', sans-serif;
+            background-color: #f7fafc;
+        }
+        /* CSS Classes สำหรับสถานะ (เหมือน index.html) */
+        .status-vacant { border-color: #48bb78; background-color: #f0fff4; }
+        .status-booked { border-color: #ecc94b; background-color: #fffff0; }
+        .status-occupied { border-color: #f56565; background-color: #fff5f5; }
+
+        /* CSS สำหรับตาราง */
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 2. Header (แถบนำทาง) -->
+    <nav class="bg-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo/Title -->
+                <div class="flex-shrink-0">
+                    <span class="text-2xl font-bold text-red-600">Admin Dashboard</span>
+                </div>
+                
+                <!-- ข้อมูล User และปุ่ม Logout -->
+                <div class="flex items-center space-x-4">
+                    <span id="user-welcome" class="text-gray-700">กำลังโหลด...</span>
+                    <button id="logout-button" class="bg-red-500 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-red-600">
+                        ออกจากระบบ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 3. ส่วนแสดงผลหลัก -->
+    <main class="max-w-7xl mx-auto p-4 mt-4">
+
+        <!-- ส่วนที่ 1: สถานะช่องจอด Real-time -->
+        <section class="mb-8">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">สถานะช่องจอดปัจจุบัน</h2>
+            <div id="parking-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- JavaScript จะเติมการ์ดสถานะที่นี่ -->
+            </div>
+        </section>
+
+        <!-- ส่วนที่ 2: ปุ่มควบคุม (Admin) -->
+        <section class="mb-8 bg-white p-4 rounded-lg shadow">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">เครื่องมือแอดมิน</h2>
+            <button id="reset-slots-button" class="bg-red-600 text-white py-2 px-4 rounded-md font-semibold hover:bg-red-700">
+                รีเซ็ตช่องจอดทั้งหมด (บังคับ "ว่าง")
+            </button>
+        </section>
+
+        <!-- ส่วนที่ 3: ประวัติการใช้งานทั้งหมด -->
+        <section>
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">ประวัติการใช้งานทั้งหมด</h2>
+            <div class="bg-white shadow-md rounded-lg overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ช่องจอด</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เวลาเข้าจอด</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เวลาออก</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ระยะเวลา (นาที)</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ค่าบริการ (บาท)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- JavaScript จะเติมประวัติทั้งหมดที่นี่ -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+    
+    <!-- 4. Modal ยืนยันการรีเซ็ต (ซ่อนไว้ตอนแรก) -->
+    <div id="reset-modal" class="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm mx-auto">
+            <h3 class="text-lg font-medium text-gray-900">ยืนยันการรีเซ็ต</h3>
+            <p class="mt-2 text-sm text-gray-600">
+                คุณแน่ใจหรือไม่ว่าต้องการรีเซ็ตช่องจอดทั้งหมด? การกระทำนี้จะบังคับให้ทุกช่อง "ว่าง" และล้างข้อมูลการจองหรือการจอดปัจจุบัน (แต่จะไม่ลบประวัติ)
+            </p>
+            <div class="mt-4 flex justify-end space-x-3">
+                <button id="cancel-reset-button" class="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300">
+                    ยกเลิก
+                </button>
+                <button id="confirm-reset-button" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700">
+                    ยืนยัน
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- 5. ส่วน JavaScript -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+
+    <script>
+        // 5.1) ใส่ Firebase Config ของคุณ 
+        const firebaseConfig = {
+        apiKey: "AIzaSyAEfO5y7LD5eo1jqg2eKRME0eAD8oC8qkM",
+        authDomain: "spark-plan-49c4f.firebaseapp.com",
+        databaseURL: "https://spark-plan-49c4f-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "spark-plan-49c4f",
+        storageBucket: "spark-plan-49c4f.firebasestorage.app",
+        messagingSenderId: "373595166979",
+        appId: "1:373595166979:web:3974035514a4a2d17a3136",
+        measurementId: "G-GPQ1PSWJ6C"
+        };
+
+        // 5.2)  Admin Auth Guard (สำคัญมาก) 
+        const loggedInUser = localStorage.getItem('loggedInUser');
+        const userRole = localStorage.getItem('userRole');
+
+        if (!loggedInUser || userRole !== 'admin') {
+            // ถ้าไม่ใช่แอดมิน หรือยังไม่ล็อกอิน
+            alert('คุณไม่มีสิทธิ์เข้าถึงหน้านี้'); // (ใช้ alert ชั่วคราวเพราะหน้านี้ยังไม่มี UI แสดง error)
+            window.location.href = './login.html';
+        }
+
+        // 5.3) เริ่มต้น Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // 5.4) อ้างอิงไปยัง Elements
+        const userWelcome = document.getElementById('user-welcome');
+        const logoutButton = document.getElementById('logout-button');
+        const parkingGrid = document.getElementById('parking-grid');
+        const historyTableBody = document.getElementById('history-table-body');
+        
+        // Elements ของ Modal
+        const resetButton = document.getElementById('reset-slots-button');
+        const resetModal = document.getElementById('reset-modal');
+        const cancelResetButton = document.getElementById('cancel-reset-button');
+        const confirmResetButton = document.getElementById('confirm-reset-button');
+
+        // 5.5) ตั้งค่าเริ่มต้นหน้าเว็บ
+        userWelcome.textContent = `แอดมิน: ${loggedInUser}`;
+        
+        logoutButton.addEventListener('click', () => {
+            localStorage.removeItem('loggedInUser');
+            localStorage.removeItem('userRole');
+            window.location.href = './login.html';
+        });
+
+        // 5.6) สถานะช่องจอดปัจจุบัน
+        const parkingSlotsRef = database.ref('/parking_slots');
+        parkingSlotsRef.on('value', (snapshot) => {
+            const slotsData = snapshot.val();
+            parkingGrid.innerHTML = ''; // ล้างข้อมูลเก่า
+            
+            for (const slotId in slotsData) {
+                parkingGrid.innerHTML += createSlotCardHTML(slotId, slotsData[slotId]);
+            }
+        });
+
+        // 5.7) ประวัติการใช้งานทั้งหมด
+        const historyRef = database.ref('/parking_history');
+        historyRef.on('value', (snapshot) => {
+            const historyData = snapshot.val();
+            historyTableBody.innerHTML = ''; // ล้างข้อมูลเก่า
+            
+            if (historyData) {
+                // เรียงข้อมูลจากใหม่ไปเก่า (ตามเวลาที่ออก)
+                const sortedHistory = Object.values(historyData)
+                    .sort((a, b) => b.left_at - a.left_at);
+                    
+                sortedHistory.forEach(record => {
+                    const row = `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">${record.user_id}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${record.slot_id}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${formatTimestamp(record.parked_at)}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${formatTimestamp(record.left_at)}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${record.duration_minutes} นาที</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-red-600">${record.cost_baht} บาท</td>
+                        </tr>
+                    `;
+                    historyTableBody.innerHTML += row;
+                });
+            } else {
+                historyTableBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-gray-500">ยังไม่มีประวัติการใช้งาน</td></tr>`;
+            }
+        });
+
+        // 5.8) ⭐️ ควบคุมปุ่ม Reset และ Modal
+        
+        // เปิด Modal
+        resetButton.addEventListener('click', () => {
+            resetModal.classList.remove('hidden');
+        });
+
+        // ปิด Modal (กดยกเลิก)
+        cancelResetButton.addEventListener('click', () => {
+            resetModal.classList.add('hidden');
+        });
+
+        // ยืนยันการ Reset
+        confirmResetButton.addEventListener('click', () => {
+            console.log('กำลังรีเซ็ตช่องจอดทั้งหมด...');
+            resetAllSlots();
+            resetModal.classList.add('hidden');
+        });
+        
+        // ฟังก์ชันสำหรับรีเซ็ตช่องจอด
+        function resetAllSlots() {
+            const resetData = {
+                status: 'ว่าง',
+                booked_by_user: null,
+                booked_at: null,
+                parked_at: null
+            };
+            
+            // สร้าง object สำหรับอัปเดตข้อมูลทีเดียว (มีประสิทธิภาพกว่า)
+            const updates = {};
+            updates['/parking_slots/A1'] = resetData;
+            updates['/parking_slots/A2'] = resetData;
+            updates['/parking_slots/A3'] = resetData;
+            
+            // สั่งอัปเดตที่ root
+            database.ref().update(updates)
+                .then(() => {
+                    console.log('รีเซ็ตช่องจอดทั้งหมดสำเร็จ');
+                })
+                .catch((error) => {
+                    console.error('เกิดข้อผิดพลาดในการรีเซ็ต:', error);
+                });
+        }
+
+        // 5.9) ฟังก์ชันสร้างการ์ด (สำหรับ Admin)
+        function createSlotCardHTML(spotId, data) {
+            let statusClass = '';
+            let statusColor = '';
+            let statusText = '';
+            let detailText = '';
+
+            switch (data.status) {
+                case 'ว่าง':
+                    statusClass = 'status-vacant';
+                    statusColor = 'text-green-600';
+                    statusText = 'ว่าง';
+                    detailText = 'พร้อมให้บริการ';
+                    break;
+                case 'จอง':
+                    statusClass = 'status-booked';
+                    statusColor = 'text-yellow-600';
+                    statusText = 'จองแล้ว';
+                    detailText = `จองโดย: <strong>${data.booked_by_user}</strong> (ตั้งแต่ ${formatTimestamp(data.booked_at)})`;
+                    break;
+                case 'จอด':
+                    statusClass = 'status-occupied';
+                    statusColor = 'text-red-600';
+                    statusText = 'ไม่ว่าง (จอดอยู่)';
+                    detailText = `จอดโดย: <strong>${data.booked_by_user}</strong> (ตั้งแต่ ${formatTimestamp(data.parked_at)})`;
+                    break;
+            }
+
+            return `
+                <div class="spot-card border-l-4 p-4 rounded-lg shadow ${statusClass}">
+                    <h3 class="text-xl font-bold text-gray-900">ช่อง ${spotId}</h3>
+                    <p class="text-lg font-semibold ${statusColor}">${statusText}</p>
+                    <div class="text-sm text-gray-600 min-h-[40px] mt-2">${detailText}</div>
+                </div>
+            `;
+        }
+        
+        // 5.10) ฟังก์ชันช่วยแปลง Timestamp
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '-';
+            const date = new Date(timestamp);
+            return date.toLocaleString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        }
+
+    </script>
+</body>
+</html>

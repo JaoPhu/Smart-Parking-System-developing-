@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Parking - ประวัติการใช้งาน</title>
+    <!-- 1. โหลด Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Kanit', sans-serif;
+            background-color: #f7fafc;
+        }
+        /* Style สำหรับตาราง */
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+        }
+        thead tr {
+            background-color: #f1f5f9;
+        }
+        tbody tr:nth-child(even) {
+            background-color: #fdfdfd;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 2. Header (แถบนำทาง) -->
+    <nav class="bg-white shadow-md">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo/Title -->
+                <div class="flex-shrink-0">
+                    <span class="text-2xl font-bold text-blue-600">Smart Parking</span>
+                </div>
+                
+                <!-- ข้อมูล User และปุ่ม Logout -->
+                <div class="flex items-center space-x-4">
+                    <span id="user-welcome" class="text-gray-700">กำลังโหลด...</span>
+                    <!-- ⭐️ (แก้ไข) เปลี่ยน href ให้เป็น /index.html (absolute path) ⭐️ -->
+                    <a href="/index.html" class="text-sm text-blue-600 hover:underline">กลับหน้าหลัก</a>
+                    <button id="logout-button" class="bg-red-500 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-red-600">
+                        ออกจากระบบ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 3. ส่วนแสดงผลประวัติ -->
+    <main class="max-w-6xl mx-auto p-4 mt-4">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-4">ประวัติการใช้งานของคุณ</h2>
+        
+        <!-- ส่วนตารางแสดงผล -->
+        <div class="bg-white shadow-md rounded-lg overflow-hidden">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ช่องจอด</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เวลาเข้าจอด</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เวลาออก</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ระยะเวลา (นาที)</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ค่าบริการ (บาท)</th>
+                    </tr>
+                </thead>
+                <tbody id="history-table-body" class="bg-white divide-y divide-gray-200">
+                    <!-- JavaScript จะเติมข้อมูลที่นี่ -->
+                    <!-- <tr><td colspan="5" class="text-center p-4">กำลังโหลด...</td></tr> -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- ข้อความกรณีไม่พบข้อมูล -->
+        <div id="no-history-message" class="text-center p-8 bg-white shadow-md rounded-lg mt-4 hidden">
+            <p class="text-gray-600 text-lg">ไม่พบประวัติการใช้งาน</p>
+        </div>
+
+    </main>
+
+    <!-- 4. ส่วน JavaScript -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+
+    <script>
+        // ⭐️⭐️⭐️ (โค้ดที่แก้ไข) ⭐️⭐️⭐️
+        // "ห่อ" โค้ดทั้งหมดไว้: สั่งให้ "รอ" จนกว่า HTML จะโหลดเสร็จ
+        document.addEventListener('DOMContentLoaded', (event) => {
+        
+            // 4.1) ⭐️⭐️⭐️ ใส่ Firebase Config (ตัวยึดตำแหน่ง) ⭐️⭐️⭐️
+            // ‼️ (สำคัญ!) คุณต้องคัดลอก Config ที่ "ถูกต้อง" (จากโปรเจกต์ spark-plan-49c4f)
+            // มาวางทับตรงนี้ด้วยนะครับ!
+        const firebaseConfig = {
+        apiKey: "AIzaSyAEfO5y7LD5eo1jqg2eKRME0eAD8oC8qkM",
+        authDomain: "spark-plan-49c4f.firebaseapp.com",
+        databaseURL: "https://spark-plan-49c4f-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "spark-plan-49c4f",
+        storageBucket: "spark-plan-49c4f.firebasestorage.app",
+        messagingSenderId: "373595166979",
+        appId: "1:373595166979:web:3974035514a4a2d17a3136",
+        measurementId: "G-GPQ1PSWJ6C"
+        };
+
+            // 4.2) ตรวจสอบการล็อกอิน (Auth Guard)
+            const loggedInUser = localStorage.getItem('loggedInUser');
+            const userRole = localStorage.getItem('userRole');
+
+            if (!loggedInUser) {
+                // ⭐️ (แก้ไข) เปลี่ยนเป็น /login.html (absolute path) ⭐️
+                window.location.href = '/login.html';
+                return; // ⭐️ (เพิ่ม return) หยุดสคริปต์ทันทีถ้าไม่ล็อกอิน
+            }
+
+            // 4.3) เริ่มต้น Firebase
+            firebase.initializeApp(firebaseConfig);
+            const database = firebase.database();
+
+            // 4.4) อ้างอิงไปยัง Elements
+            const userWelcome = document.getElementById('user-welcome');
+            const logoutButton = document.getElementById('logout-button');
+            const tableBody = document.getElementById('history-table-body');
+            const noHistoryMessage = document.getElementById('no-history-message');
+
+            // 4.5) ตั้งค่าเริ่มต้นหน้าเว็บ
+            // (ตอนนี้โค้ด "รอ" จน HTML โหลดเสร็จ, userWelcome จะไม่เป็น null แล้ว)
+            userWelcome.textContent = `ผู้ใช้: ${loggedInUser}`;
+            
+            logoutButton.addEventListener('click', () => {
+                localStorage.removeItem('loggedInUser');
+                localStorage.removeItem('userRole');
+                // ⭐️ (แก้ไข) เปลี่ยนเป็น /login.html (absolute path) ⭐️
+                window.location.href = '/login.html';
+            });
+            
+            // 4.6) ⭐️⭐️⭐️ หัวใจหลัก: "ฟัง" ข้อมูลประวัติ ⭐️⭐️⭐️
+            
+            // แสดง "กำลังโหลด..." ก่อน
+            tableBody.innerHTML = `<tr><td colspan="5" class="text-center p-4 text-gray-500">กำลังโหลด...</td></tr>`;
+
+            // อ้างอิงไปยังตาราง "parking_history"
+            const historyRef = database.ref('/parking_history');
+            
+            // ⭐️ "กรอง" ข้อมูล: สั่งให้ Firebase ค้นหา (orderByChild) 
+            // เฉพาะรายการที่ 'user_id' ตรงกับ 'loggedInUser'
+            historyRef.orderByChild('user_id').equalTo(loggedInUser)
+                .on('value', (snapshot) => {
+                    
+                    const historyData = snapshot.val();
+                    tableBody.innerHTML = ''; // ล้างข้อมูลเก่า
+                    
+                    if (historyData) {
+                        noHistoryMessage.classList.add('hidden'); // ซ่อนข้อความ "ไม่พบ"
+                        
+                        // วนลูปข้อมูลที่ได้มา (Firebase อาจจะส่งมาไม่เรียงลำดับ)
+                        // เราจะมาจัดเรียงเองตามเวลาที่ออก (left_at)
+                        const sortedHistory = Object.values(historyData)
+                            .sort((a, b) => b.left_at - a.left_at); // เรียงจากใหม่ไปเก่า
+                            
+                        sortedHistory.forEach(record => {
+                            const row = `
+                                <tr>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${record.slot_id}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${formatTimestamp(record.parked_at)}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${formatTimestamp(record.left_at)}</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">${record.duration_minutes} นาที</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-red-600">${record.cost_baht} บาท</td>
+                                </tr>
+                            `;
+                            tableBody.innerHTML += row;
+                        });
+                        
+                    } else {
+                        // ถ้าไม่พบข้อมูล (historyData เป็น null)
+                        noHistoryMessage.classList.remove('hidden'); // แสดงข้อความ "ไม่พบ"
+                    }
+                }, (error) => {
+                    // กรณี Error (เช่น Rules ไม่ผ่าน)
+                    console.error("Firebase Error:", error);
+                    tableBody.innerHTML = `<tr><td colspan="5" class="text-center p-4 text-red-500">เกิดข้อผิดพลาดในการดึงข้อมูล</td></tr>`;
+                });
+
+            // 4.7) ฟังก์ชันช่วยแปลง Timestamp ให้อ่านง่าย
+            function formatTimestamp(timestamp) {
+                if (!timestamp) return 'N/A';
+                const date = new Date(timestamp);
+                // ใช้ toLocaleString ของไทยเพื่อให้แสดง วันที่/เวลา ที่ถูกต้อง
+                return date.toLocaleString('th-TH', {
+                    year: 'numeric',
+                    month: 'numeric',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+
+        }); // ⭐️⭐️⭐️ (โค้ดที่แก้ไข) ปิด "ห่อ" ⭐️⭐️⭐️
+
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Parking - ล็อกอิน</title>
+    <!-- 1. โหลด Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* เพิ่ม font ที่รองรับภาษาไทย */
+        body {
+            font-family: 'Inter', 'Kanit', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+
+    <!-- 2. ส่วน HTML: การ์ดล็อกอิน -->
+    <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-sm">
+        <h1 class="text-2xl font-bold text-center text-blue-600 mb-4">ระบบจองที่จอดรถ</h1>
+        <h2 class="text-xl font-semibold text-center text-gray-700 mb-6">กรุณาเข้าสู่ระบบ</h2>
+
+        <!-- ฟอร์มล็อกอิน -->
+        <!-- เราจะใช้ onsubmit เพื่อเรียกฟังก์ชัน JavaScript ของเรา -->
+        <form id="loginForm">
+            <!-- ช่อง Username -->
+            <div class="mb-4">
+                <label for="username" class="block text-sm font-medium text-gray-700">ชื่อผู้ใช้:</label>
+                <input type="text" id="username" name="username" required
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <!-- ช่อง Password -->
+            <div class="mb-6">
+                <label for="password" class="block text-sm font-medium text-gray-700">รหัสผ่าน:</label>
+                <input type="password" id="password" name="password" required
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <!-- ข้อความแสดงข้อผิดพลาด (ซ่อนไว้ก่อน) -->
+            <p id="error-message" class="text-red-500 text-sm text-center mb-4 hidden"></p>
+
+            <!-- ปุ่มล็อกอิน -->
+            <button type="submit"
+                    class="w-full bg-blue-600 text-white py-2 px-4 rounded-md font-semibold hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                เข้าสู่ระบบ
+            </button>
+        </form>
+
+        <!-- แสดงรายชื่อ User สำหรับทดสอบ -->
+        <div class="mt-6 text-xs text-gray-500 text-center">
+            <p class="font-bold">สำหรับทดสอบ (Hardcoded):</p>
+            <p>user1 (pass: 123)</p>
+            <p>user2 (pass: 456)</p>
+            <p>user3 (pass: 789)</p>
+            <p>admin (pass: adminpass)</p>
+        </div>
+    </div>
+
+    <!-- 3. ส่วน JavaScript: ตรรกะการล็อกอิน -->
+    <script>
+        // ฐานข้อมูล User (เก็บในโค้ดเว็บตามที่คุณต้องการ)
+        const HARDCODED_USERS = {
+            "user1": { password: "123", role: "user" },
+            "user2": { password: "456", role: "user" },
+            "user3": { password: "789", role: "user" },
+            "admin": { password: "adminpass", role: "admin" }
+        };
+
+        // ตรวจสอบทันทีว่าเคยล็อกอินค้างไว้หรือไม่
+        // ถ้าใช่ ให้เด้งไปหน้าทที่ถูกต้องเลย
+        (function autoRedirect() {
+            const user = localStorage.getItem('loggedInUser');
+            const role = localStorage.getItem('userRole');
+            
+            if (user && role) {
+                console.log('พบการล็อกอินค้างไว้, กำลังเปลี่ยนหน้า...');
+                if (role === 'admin') {
+                    window.location.href = 'dashboard.html';
+                } else {
+                    window.location.href = 'index.html'; // หน้าจองหลัก
+                }
+            }
+        })();
+
+
+        // เพิ่ม Event Listener ให้กับฟอร์ม
+        document.getElementById('loginForm').addEventListener('submit', function(event) {
+            // ป้องกันไม่ให้ฟอร์มโหลดหน้าใหม่ (ซึ่งเป็นพฤติกรรมปกติของ form)
+            event.preventDefault(); 
+            
+            handleLogin();
+        });
+
+        function handleLogin() {
+            const username = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            const errorMessageElement = document.getElementById('error-message');
+
+            // ซ่อนข้อความ error เก่า
+            errorMessageElement.classList.add('hidden');
+            errorMessageElement.textContent = '';
+
+            // ตรวจสอบ user
+            if (HARDCODED_USERS[username] && HARDCODED_USERS[username].password === pass) {
+                // ⭐️ ล็อกอินสำเร็จ
+                console.log('ล็อกอินสำเร็จ:', username, 'Role:', HARDCODED_USERS[username].role);
+
+                // เก็บข้อมูลไว้ใน "หน่วยความจำเบราว์เซอร์" (LocalStorage)
+                localStorage.setItem('loggedInUser', username);
+                localStorage.setItem('userRole', HARDCODED_USERS[username].role);
+                
+                // ถ้าเป็น admin ให้ไปหน้า dashboard
+                if (HARDCODED_USERS[username].role === 'admin') {
+                    window.location.href = 'dashboard.html';
+                } else {
+                    // ถ้าเป็น user ทั่วไป ให้ไปหน้าจอง (index.html)
+                    window.location.href = 'index.html';
+                }
+            } else {
+                // ⭐️ ล็อกอินล้มเหลว
+                console.log('ล็อกอินล้มเหลว');
+                errorMessageElement.textContent = 'ชื่อผู้ใช้ หรือ รหัสผ่านไม่ถูกต้อง';
+                errorMessageElement.classList.remove('hidden');
+            }
+        }
+    </script>
+
+</body>
+</html>
