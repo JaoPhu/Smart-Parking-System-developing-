@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Parking - จองที่จอดรถ</title>
+    <!-- 1. โหลด Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', 'Kanit', sans-serif;
+            background-color: #f7fafc;
+        }
+        .spot-card {
+            transition: all 0.3s ease;
+        }
+        /* CSS Classes สำหรับสถานะ */
+        .status-vacant { border-color: #48bb78; background-color: #f0fff4; }
+        .status-booked { border-color: #ecc94b; background-color: #fffff0; }
+        .status-occupied { border-color: #f56565; background-color: #fff5f5; }
+    </style>
+</head>
+<body>
+
+    <!-- 2. Header (แถบนำทาง) -->
+    <nav class="bg-white shadow-md">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <!-- Logo/Title -->
+                <div class="flex-shrink-0">
+                    <span class="text-2xl font-bold text-blue-600">Smart Parking</span>
+                </div>
+                
+                <!-- ข้อมูล User และปุ่ม Logout -->
+                <div class="flex items-center space-x-4">
+                    <span id="user-welcome" class="text-gray-700">กำลังโหลด...</span>
+                    <!-- แก้ไข: เพิ่ม ./ เพื่อระบุ path ให้ชัดเจน -->
+                    <a href="./user.html" class="text-sm text-blue-600 hover:underline">ดูประวัติ</a>
+                    <button id="logout-button" class="bg-red-500 text-white px-3 py-1 rounded-md text-sm font-medium hover:bg-red-600">
+                        ออกจากระบบ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 3. ส่วนแสดงผลช่องจอด -->
+    <main class="max-w-6xl mx-auto p-4 mt-4">
+        <h2 class="text-2xl font-semibold text-gray-800 mb-2">เลือกที่จอดรถ</h2>
+        <p class="text-gray-600 mb-4">สถานะอัปเดตแบบเรียลไทม์</p>
+        
+        <!-- นาฬิกา Real-time -->
+        <h3 class="text-xl text-center font-mono mb-6" id="clock-display">--:--:--</h3>
+
+        <!-- Grid แสดงช่องจอด (JavaScript จะเติมข้อมูลที่นี่) -->
+        <div id="parking-grid" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        </div>
+    </main>
+
+    <!-- 4. ส่วน JavaScript -->
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+
+    <script>
+        // 4.1)  Firebase Config 
+        const firebaseConfig = {
+        apiKey: "AIzaSyAEfO5y7LD5eo1jqg2eKRME0eAD8oC8qkM",
+        authDomain: "spark-plan-49c4f.firebaseapp.com",
+        databaseURL: "https://spark-plan-49c4f-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "spark-plan-49c4f",
+        storageBucket: "spark-plan-49c4f.firebasestorage.app",
+        messagingSenderId: "373595166979",
+        appId: "1:373595166979:web:3974035514a4a2d17a3136",
+        measurementId: "G-GPQ1PSWJ6C"
+        };
+
+        // 4.2) ⭐️⭐️⭐️ กำหนดค่าบริการ ⭐️⭐️⭐️
+        const HOURLY_RATE = 20; // 20 บาท ต่อชั่วโมง (ปัดขึ้น)
+
+        // 4.3) ตรวจสอบการล็อกอิน (Auth Guard)
+        const loggedInUser = localStorage.getItem('loggedInUser');
+        const userRole = localStorage.getItem('userRole');
+
+        if (!loggedInUser) {
+            // ถ้าไม่ล็อกอิน, เด้งกลับไปหน้า login
+            // แก้ไข: เพิ่ม ./ เพื่อระบุ path ให้ชัดเจน
+            window.location.href = './login.html';
+        }
+
+        // 4.4) เริ่มต้น Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // 4.5) อ้างอิงไปยัง Elements
+        const userWelcome = document.getElementById('user-welcome');
+        const logoutButton = document.getElementById('logout-button');
+        const clockDisplay = document.getElementById('clock-display');
+        const parkingGrid = document.getElementById('parking-grid');
+
+        // 4.6) ตั้งค่าเริ่มต้นหน้าเว็บ
+        userWelcome.textContent = `ยินดีต้อนรับ, ${loggedInUser}`;
+        
+        logoutButton.addEventListener('click', () => {
+            localStorage.removeItem('loggedInUser');
+            localStorage.removeItem('userRole');
+            // แก้ไข: เพิ่ม ./ เพื่อระบุ path ให้ชัดเจน
+            window.location.href = './login.html';
+        });
+
+        // 4.7) นาฬิกา Real-time
+        setInterval(() => {
+            const timeString = new Date().toLocaleTimeString('th-TH', { hour12: false });
+            clockDisplay.textContent = timeString;
+        }, 1000);
+
+        // 4.8)  ข้อมูลที่จอดรถ 
+        const parkingSlotsRef = database.ref('/parking_slots');
+        
+        parkingSlotsRef.on('value', (snapshot) => {
+            const slotsData = snapshot.val();
+            parkingGrid.innerHTML = ''; // ล้างข้อมูลเก่าก่อน
+            
+            // ตรวจสอบว่า User นี้ มีการจองหรือจอดค้างอยู่หรือไม่
+            let userHasActiveSlot = false;
+            for (const slotId in slotsData) {
+                const data = slotsData[slotId];
+                if ((data.status === 'จอง' || data.status === 'จอด') && data.booked_by_user === loggedInUser) {
+                    userHasActiveSlot = true;
+                    break;
+                }
+            }
+
+            // วนลูปสร้างการ์ดที่จอดรถ
+            for (const slotId in slotsData) {
+                const data = slotsData[slotId];
+                const cardHTML = createSlotCardHTML(slotId, data, userHasActiveSlot);
+                parkingGrid.innerHTML += cardHTML;
+            }
+        });
+
+        // 4.9) ฟังก์ชันสร้างการ์ด HTML (UI)
+        function createSlotCardHTML(spotId, data, userHasActiveSlot) {
+            let statusClass = '';
+            let statusColor = '';
+            let statusText = '';
+            let detailText = '';
+            let buttonHTML = '';
+
+            const now = Date.now();
+            
+            switch (data.status) {
+                case 'ว่าง':
+                    statusClass = 'status-vacant';
+                    statusColor = 'text-green-600';
+                    statusText = 'ว่าง';
+                    detailText = 'พร้อมให้บริการ';
+                    
+                    // ตรวจสอบว่า user มีช่องจอดอื่นอยู่หรือไม่
+                    if (userHasActiveSlot) {
+                        buttonHTML = `<button disabled class="w-full bg-gray-400 text-white py-2 px-4 rounded-md cursor-not-allowed mt-4">คุณมีช่องจอดแล้ว</button>`;
+                    } else {
+                        buttonHTML = `<button onclick="bookSlot('${spotId}')" class="w-full bg-blue-600 text-white py-2 px-4 rounded-md font-semibold hover:bg-blue-700 mt-4">จองเลย</button>`;
+                    }
+                    break;
+                
+                case 'จอง':
+                    statusClass = 'status-booked';
+                    statusColor = 'text-yellow-600';
+                    statusText = 'จองแล้ว';
+                    
+                    const bookedTime = data.booked_at;
+                    const elapsedMs = now - bookedTime;
+                    const elapsedMinutes = Math.floor(elapsedMs / 60000);
+
+                    detailText = `จองโดย: <strong>${data.booked_by_user}</strong><br>เวลาที่จอง: ${elapsedMinutes} นาที (รอ 15 นาที)`;
+                    
+                    // ตรวจสอบว่าเป็นคนจองเองหรือไม่
+                    if (data.booked_by_user === loggedInUser) {
+                        buttonHTML = `<button onclick="cancelBooking('${spotId}')" class="w-full bg-yellow-500 text-white py-2 px-4 rounded-md font-semibold hover:bg-yellow-600 mt-4">ยกเลิกการจอง</button>`;
+                    } else {
+                        buttonHTML = `<button disabled class="w-full bg-gray-400 text-white py-2 px-4 rounded-md cursor-not-allowed mt-4">จองแล้ว</button>`;
+                    }
+                    break;
+                
+                case 'จอด':
+                    statusClass = 'status-occupied';
+                    statusColor = 'text-red-600';
+                    statusText = 'ไม่ว่าง (จอดอยู่)';
+                    
+                    const parkedTime = data.parked_at;
+                    const parkedMs = now - parkedTime;
+                    const parkedHours = Math.ceil(parkedMs / (1000 * 60 * 60)); // ปัดขึ้น
+                    const cost = parkedHours * HOURLY_RATE;
+
+                    detailText = `จอดโดย: <strong>${data.booked_by_user}</strong><br>ค่าบริการปัจจุบัน: ${cost} บาท`;
+                    
+                    buttonHTML = `<button disabled class="w-full bg-red-400 text-white py-2 px-4 rounded-md cursor-not-allowed mt-4">ไม่ว่าง</button>`;
+                    break;
+            }
+
+            // ประกอบร่าง HTML
+            return `
+                <div class="spot-card border-l-4 p-4 rounded-lg shadow ${statusClass}">
+                    <h3 class="text-xl font-bold text-gray-900">ช่อง ${spotId}</h3>
+                    <p class="text-lg font-semibold ${statusColor}">${statusText}</p>
+                    <div class="text-sm text-gray-600 min-h-[50px] mt-2">${detailText}</div>
+                    ${buttonHTML}
+                </div>
+            `;
+        }
+
+        // 4.10) ฟังก์ชันสำหรับ "เขียน" ข้อมูล (Actions)
+        
+        // ฟังก์ชัน: จองช่องจอด
+        function bookSlot(spotId) {
+            console.log(`กำลังจอง ${spotId} สำหรับ ${loggedInUser}`);
+            const slotRef = database.ref(`/parking_slots/${spotId}`);
+            
+            slotRef.update({
+                status: 'จอง',
+                booked_by_user: loggedInUser,
+                booked_at: firebase.database.ServerValue.TIMESTAMP, // ⭐️ ใช้เวลาของ Server
+                parked_at: null // ล้างค่าเวลาจอดเก่า (ถ้ามี)
+            });
+        }
+
+        // ฟังก์ชัน: ยกเลิกการจอง
+        function cancelBooking(spotId) {
+            console.log(`กำลังยกเลิกการจอง ${spotId}`);
+            const slotRef = database.ref(`/parking_slots/${spotId}`);
+            
+            slotRef.update({
+                status: 'ว่าง',
+                booked_by_user: null,
+                booked_at: null,
+                parked_at: null
+            });
+        }
+
+    </script>
+</body>
+</html>
+

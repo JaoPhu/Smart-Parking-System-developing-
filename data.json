@@ -1,0 +1,23 @@
+{
+  "parking_slots": {
+    "A1": {
+      "status": "ว่าง",
+      "booked_by_user": null,
+      "booked_at": null,
+      "parked_at": null
+    },
+    "A2": {
+      "status": "ว่าง",
+      "booked_by_user": null,
+      "booked_at": null,
+      "parked_at": null
+    },
+    "A3": {
+      "status": "ว่าง",
+      "booked_by_user": null,
+      "booked_at": null,
+      "parked_at": null
+    }
+  },
+  "parking_history": {}
+}
